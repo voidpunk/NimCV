@@ -1,29 +1,14 @@
-import 
-  strutils, strformat, os, times,
-  progress,
-  parsers/enumparse,
-  downloader
+import strutils, os
+import parsers/enumparse
+import downloader
 
 
-proc parseHeaderFile*(filePath: string): seq[string] =
-  ## Parses a header file and returns valid Nim code to bind it
-  var 
-    currentBlock: seq[string] = @[]
-    inEnum = false
-    lineCount = 0
-    startTime = getTime()
-  # First count total lines for accurate progress
-  for _ in filePath.lines:
-    inc lineCount
-  # Reset file reading
-  let file = open(filePath)
-  defer: file.close()
-  # Start the progress bar
-  var bar = newProgressBar(total = lineCount)
-  bar.start()
-  # Parse the header
-  for line in file.lines:
-    bar.increment()
+proc parseHeaderFile*(filename: string): seq[string] =
+  ## Parses a header file and returns Nim valid code bindings
+  var currentBlock: seq[string] = @[]
+  var inEnum = false
+  # Parshe the file
+  for line in filename.lines:
     if line.contains("enum") and line.contains("{"):
       inEnum = true
       currentBlock.add(line)
@@ -35,11 +20,6 @@ proc parseHeaderFile*(filePath: string): seq[string] =
         if nimEnum.len > 0:
           result.add(nimEnum)
         currentBlock = @[]
-  # Log info
-  bar.finish()
-  let elapsedTime = (getTime() - startTime).inMilliseconds
-  echo &"Processed {lineCount} lines in {elapsedTime} ms"
-  echo &"Found {result.len} enums\n"
 
 
 proc writeFileLines(path: string, lines: seq[string]) =
@@ -57,9 +37,9 @@ when isMainModule:
     opencvSourcePath = "./opencv"
     nimcvSourcePath = "./src/NimCV"
   downloadOpencvSource(opencvVersion, opencvSourcePath)
+  echo "⚙️ Parsing headers..."
   for path in walkDir(opencvSourcePath):
     if path.kind == pcFile:
-      let (_, name, ext) = path.path.splitFile()
+      let (_, name, _) = path.path.splitFile()
       let outputNim = nimcvSourcePath / name & ".nim"
-      echo "⚙️ Parsing header: " & name & ext
       writeFileLines(outputNim, parseHeaderFile(path.path))
