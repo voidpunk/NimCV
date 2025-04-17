@@ -10,3 +10,9 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.2.2"
+
+# required for codegen:
+# zippy, progress
+
+task codegen, "Generate code":
+  exec "nim r --define:ssl --verbosity:0 --warnings:off --hints:off generator/generator.nim"
