@@ -3,11 +3,11 @@ import downloader
 
 
 type
+  ParserState = enum
+    Header, Class, Struct, Enum, Typedef, Function
   ParsedEntity = object
     content: string
-    kind: string
-  ParserState = enum
-    inNormal, inClass, inStruct, inEnum, inTypedef, inFunc
+    kind: ParserState
 
 proc parseClass(content: string, posStart, posEnd: int): string =
   ## Parses a C++ class definition and converts it to Nim code bindings
@@ -58,33 +58,30 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
   ## Main parser that reads a C++ header file and extracts entities
   var
     content = readFile(filePath)
-    state = inNormal
-    braceDepth = 0
-    pos = 0
-    posStart = 0
-    posEnd = 0
+    state = Header
+    entityKind: ParserState
     parsedContent: string
-    entityKind: string
+    braceDepth, pos, posStart, posEnd: int
   while pos < content.len:
     skipComments(content, pos)
     case state:
-    of inNormal:
+    of Header:
       if content.continuesWith("class", pos):
-        state = inClass
+        state = Class
         posStart = pos
       elif content.continuesWith("enum", pos):
-        state = inEnum
+        state = Enum
         posStart = pos
       elif content.continuesWith("struct", pos):
-        state = inStruct
+        state = Struct
         posStart = pos
       elif content.continuesWith("typedef", pos):
-        state = inTypedef
+        state = Typedef
         posStart = pos
       elif content.continuesWith("CV_EXPORTS", pos):
-        state = inFunc
+        state = Function
         posStart = pos
-    of inClass, inStruct, inEnum, inTypedef:
+    of Class, Struct, Enum:
       if content[pos] == '{':
         inc braceDepth
       elif content[pos] == '}':
@@ -92,26 +89,35 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
         if braceDepth <= 0:
           posEnd = pos
           case state:
-          of inClass:
+          of Class:
             parsedContent = parseClass(content, posStart, posEnd)
-            entityKind = "class"
-          of inEnum:
+            entityKind = Class
+          of Enum:
             parsedContent = parseEnum(content, posStart, posEnd)
-            entityKind = "enum"
-          of inStruct:
+            entityKind = Enum
+          of Struct:
             parsedContent = parseStruct(content, posStart, posEnd)
-            entityKind = "struct"
-          of inTypedef:
-            parsedContent = parseTypedef(content, posStart, posEnd)
-            entityKind = "typedef"
-          else: raise newException(Exception, "State inNormal not expected")
+            entityKind = Struct
+          else: raise newException(Exception, "State Header not expected")
           if parsedContent != "":
             result.add ParsedEntity(
               content: parsedContent,
               kind: entityKind
             )
-          state = inNormal
-    of inFunc:
+          state = Header
+    of Typedef:
+      let found = content.find(";", posStart)
+      if found != -1:
+        posEnd = found + 1
+        parsedContent = parseTypedef(content, posStart, posEnd)
+        pos = posEnd
+        if parsedContent != "":
+          result.add ParsedEntity(
+            content: parsedContent,
+            kind: Typedef
+          )
+        state = Header
+    of Function:
       let found = content.find(");", posStart)
       if found != -1:
         posEnd = found + 2
@@ -120,9 +126,9 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
         if parsedContent != "":
           result.add ParsedEntity(
             content: parsedContent,
-            kind: entityKind
+            kind: Function
           )
-        state = inNormal
+        state = Header
     inc pos
 
 proc generateBindings(filePath: string, outputPath: string) =
@@ -131,15 +137,15 @@ proc generateBindings(filePath: string, outputPath: string) =
   var output = "# Auto-generated OpenCV bindings\n"
   for entity in entities:
     case entity.kind:
-    of "class":
+    of Class:
       output.add entity.content & "\n"
-    of "enum":
+    of Enum:
       output.add entity.content & "\n"
-    of "struct":
+    of Struct:
       output.add entity.content & "\n"
-    of "typedef":
+    of Typedef:
       output.add entity.content & "\n"
-    of "function":
+    of Function:
       output.add entity.content & "\n"
     else: discard
   writeFile(outputPath, output)
