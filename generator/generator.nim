@@ -67,13 +67,13 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
           posEnd = pos
           case state:
           of Class:
-            parsedContent = parseClass(content, posStart, posEnd)
+            parsedContent = parseClass(content[posStart..posEnd])
             entityKind = Class
           of Enum:
-            parsedContent = parseEnum(content, posStart, posEnd)
+            parsedContent = enumparser.parseEnum(content[posStart..posEnd])
             entityKind = Enum
           of Struct:
-            parsedContent = parseStruct(content, posStart, posEnd)
+            parsedContent = parseStruct(content[posStart..posEnd])
             entityKind = Struct
           else: raise newException(Exception, "State Header not expected")
           if parsedContent != "":
@@ -86,7 +86,7 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
       let found = content.find(";", posStart)
       if found != -1:
         posEnd = found + 1
-        parsedContent = parseTypedef(content, posStart, posEnd)
+        parsedContent = parseTypedef(content[posStart..posEnd])
         pos = posEnd
         if parsedContent != "":
           result.add ParsedEntity(
@@ -98,7 +98,7 @@ proc parseHeader(filePath: string): seq[ParsedEntity] =
       let found = content.find(");", posStart)
       if found != -1:
         posEnd = found + 2
-        parsedContent = parseFunc(content, posStart, posEnd)
+        parsedContent = parseFunc(content[posStart..posEnd])
         pos = posEnd
         if parsedContent != "":
           result.add ParsedEntity(
