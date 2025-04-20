@@ -1,4 +1,5 @@
-import strutils, os
+import strutils, os, re
+import regex
 import downloader
 
 
@@ -9,33 +10,57 @@ type
     content: string
     kind: ParserState
 
+proc stripComments(content: var string) =
+  ## Removes C/C++ comments using precompiled regex
+  const
+    blockComment = re2"""/\*[^*]*\*+(?:[^/*][^*]*\*+)*/"""  # Handles /* ... */ (even multiline)
+    lineComment  = re2"""//[^\n]*"""                        # Handles // until newline
+    whitespaces  = re2"""\s{1,}"""                          # Handles all whitespaces (' ', '\t', '\n')
+    ifndefBlock  = re2"""#ifndef.*?#endif.*?"""             # Handles #ifndef ... #endif blocks inline
+  # Replace in a single pass (faster than two separate replaces)
+  content = content.replace(blockComment, "" )  
+  content = content.replace(lineComment,  "" )
+  content = content.replace(whitespaces,  " ")
+  content = content.replace(ifndefBlock,  "" )
+  # This last must be called after stripping whitespaces, since it only works inline
+
 proc parseClass(content: string, posStart, posEnd: int): string =
   ## Parses a C++ class definition and converts it to Nim code bindings
-  result &= "[CLASS]\n"
-  result &= content[posStart..posEnd]
+  result &= "# [CLASS]\n"
+  var input = content[posStart..posEnd]
+  input.stripComments()
+  result &= input
 
 proc parseEnum(content: string, posStart, posEnd: int): string =
   ## Parses a C++ enum definition and converts it to Nim code bindings
-  result &= "[ENUM]\n"
-  result &= content[posStart..posEnd]
+  result &= "# [ENUM]\n"
+  var input = content[posStart..posEnd]
+  input.stripComments()
+  result &= input
 
 proc parseStruct(content: string, posStart, posEnd: int): string =
   ## Parses a C++ struct definition and converts it to Nim code bindings
-  result &= "[STRUCT]\n"
-  result &= content[posStart..posEnd]
+  result &= "# [STRUCT]\n"
+  var input = content[posStart..posEnd]
+  input.stripComments()
+  result &= input
 
 proc parseTypedef(content: string, posStart, posEnd: int): string =
   ## Parses a C++ typedef definition and converts it to Nim code bindings
-  result &= "[TYPEDEF]\n"
-  result &= content[posStart..posEnd]
+  result &= "# [TYPEDEF]\n"
+  var input = content[posStart..posEnd]
+  # input = stripComments(content)
+  result &= input
 
 proc parseFunc(content: string, posStart, posEnd: int): string =
   ## Parses a C++ function declaration and converts it to Nim code bindings
-  result &= "[FUNCTION]\n"
-  result &= content[posStart..posEnd]
+  result &= "# [FUNCTION]\n"
+  var input = content[posStart..posEnd]
+  input.stripComments()
+  result &= input
 
 proc skipComments(content: string, pos: var int) =
-  ## 
+  ## Skip all comments by increasing the reading pos to after them
   while pos < content.len:
     if content[pos] in {' ', '\t', '\n', '\r'}:
       inc pos
